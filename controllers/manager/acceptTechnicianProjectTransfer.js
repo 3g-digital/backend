@@ -1,4 +1,6 @@
 const Customer = require('../../models/customerModel');
+const User = require('../../models/userModel');
+const sendNotification = require('../../helpers/push/sendNotification');
 const generateOrderId = require('../../helpers/generateOrderId');
 
 const acceptTechnicianProjectTransfer = async (req, res) => {
@@ -68,7 +70,42 @@ const acceptTechnicianProjectTransfer = async (req, res) => {
     customer.workOrders.push(newWorkOrder);
     
     await customer.save();
-   
+
+    if (workOrder.technician) {
+      try {
+        const technician = await User.findById(workOrder.technician).select('fcmTokens');
+        const tokens = technician?.fcmTokens?.map((entry) => entry.token).filter(Boolean) || [];
+
+        if (tokens.length) {
+          const baseCustomerName = customer.name || 'Customer';
+          const customerDisplayName = customer.firmName
+            ? `${customer.firmName} (${baseCustomerName})`
+            : baseCustomerName;
+          const notificationTitle = 'Project Transfer Request Approved';
+          const notificationBody = `${customerDisplayName} • Status: Approved`;
+
+          await sendNotification({
+            tokens,
+            notification: {
+              title: notificationTitle,
+              body: notificationBody,
+            },
+            data: {
+              title: notificationTitle,
+              body: notificationBody,
+              customerName: baseCustomerName,
+              customerFirm: customer.firmName || '',
+              status: 'approved',
+              url: '/technician-dashboard',
+              icon: '/logo192.png',
+            },
+          });
+        }
+      } catch (notificationError) {
+        console.error('Failed to notify technician about transfer approval:', notificationError);
+      }
+    }
+
     // Format the updated work order for response
     const updatedWorkOrder = {
       ...workOrder.toObject(),

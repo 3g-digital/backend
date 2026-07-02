@@ -37,15 +37,17 @@ const getReturnedInventory = async (req, res) => {
       itemCount: entry.items.length,
       totalQuantity: entry.items.reduce((sum, item) => sum + item.quantity, 0),
       status: entry.status,
-      items: entry.items.map(item => ({
-        id: item._id,
-        itemId: item.item.id,
-        name: item.item.name,
-        type: item.item.type,
-        unit: item.item.unit,
-        quantity: item.quantity,
-        serialNumber: item.serialNumber || null
-      }))
+      items: entry.items
+        .filter(item => item.item !== null)
+        .map(item => ({
+          id: item._id,
+          itemId: item.item.id,
+          name: item.item.name,
+          type: item.item.type,
+          unit: item.item.unit,
+          quantity: item.quantity,
+          serialNumber: item.serialNumber || null
+        }))
     }));
     
     res.json({

@@ -3,16 +3,22 @@ const User = require('../../models/userModel');
 // Get all technicians
 const getTechniciansController = async (req, res) => {
   try {
-    // Check if user is admin
-    if (req.userRole !== 'admin') {
+    // Check if user is admin or manager
+    if (req.userRole !== 'admin' && req.userRole !== 'manager') {
       return res.status(403).json({
         message: 'Permission denied',
         error: true,
         success: false
       });
     }
-    
-    const technicians = await User.find({ role: 'technician' })
+
+    // If manager, only return technicians from their branch
+    let query = { role: 'technician' };
+    if (req.userRole === 'manager') {
+      query.branch = req.user.branch;
+    }
+
+    const technicians = await User.find(query)
       .select('-password')
       .populate('branch', 'name location')
       .sort('-createdAt');

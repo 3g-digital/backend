@@ -109,6 +109,7 @@ const getManagerProjects = async (req, res) => {
               customerName: customer.name,
               customerPhone: customer.phoneNumber,
               customerAddress: customer.address,
+              customerFirmName: customer.firmName,
               orderId: order.orderId,
               projectId: order.projectId,
               projectType: order.projectType,

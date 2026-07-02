@@ -41,5 +41,10 @@ const transferHistorySchema = new mongoose.Schema({
   }
 });
 
+// Performance optimization indexes
+transferHistorySchema.index({ fromId: 1, fromType: 1 }); // For source queries
+transferHistorySchema.index({ toId: 1, toType: 1 }); // For destination queries
+transferHistorySchema.index({ item: 1, transferredAt: -1 }); // For item transfer history
+
 const TransferHistory = mongoose.model('TransferHistory', transferHistorySchema);
 module.exports = TransferHistory;

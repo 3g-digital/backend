@@ -1,4 +1,6 @@
 const Customer = require('../../models/customerModel');
+const User = require('../../models/userModel');
+const sendNotification = require('../../helpers/push/sendNotification');
 
 const rejectTechnicianProjectTransfer = async (req, res) => {
   try {
@@ -33,17 +35,55 @@ const rejectTechnicianProjectTransfer = async (req, res) => {
 
     // Add entry to status history for the work order
     workOrder.statusHistory.push({
-      status: 'rejected',
+      status: 'transfer-rejected',
       remark: rejectReason,
       updatedBy: userId,
       updatedAt: new Date()
     });
 
-    // Update the work order status to rejected
-    workOrder.status = 'rejected';
+    // Update the work order status back to in-progress (reject means technician continues work)
+    workOrder.status = 'in-progress';
     workOrder.updatedAt = new Date();
 
     await customer.save();
+
+    if (workOrder.technician) {
+      try {
+        const technician = await User.findById(workOrder.technician).select('fcmTokens');
+        const tokens = technician?.fcmTokens?.map((entry) => entry.token).filter(Boolean) || [];
+
+        if (tokens.length) {
+          const baseCustomerName = customer.name || 'Customer';
+          const customerDisplayName = customer.firmName
+            ? `${customer.firmName} (${baseCustomerName})`
+            : baseCustomerName;
+          const cleanReason = (rejectReason || '').replace(/\s+/g, ' ').trim();
+          const truncatedReason = cleanReason.length > 120 ? `${cleanReason.slice(0, 117)}...` : cleanReason;
+          const notificationTitle = 'Project Transfer Request Rejected';
+          const notificationBody = `${customerDisplayName} • Status: Transfer Rejected - Continue Work${truncatedReason ? ` • Reason: ${truncatedReason}` : ''}`;
+
+          await sendNotification({
+            tokens,
+            notification: {
+              title: notificationTitle,
+              body: notificationBody,
+            },
+            data: {
+              title: notificationTitle,
+              body: notificationBody,
+              customerName: baseCustomerName,
+              customerFirm: customer.firmName || '',
+              status: 'rejected',
+              reason: truncatedReason,
+              url: '/technician-dashboard',
+              icon: '/logo192.png',
+            },
+          });
+        }
+      } catch (notificationError) {
+        console.error('Failed to notify technician about transfer rejection:', notificationError);
+      }
+    }
 
     // Format the updated work order for response
     const updatedWorkOrder = {

@@ -2,6 +2,7 @@ const Customer = require('../../models/customerModel');
 const User = require('../../models/userModel');
 const BillModel = require('../../models/billModel');
 const { generateResponse } = require('../../helpers/responseGenerator');
+const sendNotification = require('../../helpers/push/sendNotification');
 const mongoose = require('mongoose'); // Add this for ObjectId comparison
 
 const approveWorkOrder = async (req, res) => {
@@ -82,6 +83,45 @@ const approveWorkOrder = async (req, res) => {
         { customer: new mongoose.Types.ObjectId(customerId), orderId: orderId, status: { $ne: 'rejected' } },
         { $set: { status: 'approved' } }
       );
+
+      if (workOrder.technician) {
+        try {
+          const technician = await User.findById(workOrder.technician).select('fcmTokens');
+          const tokens = technician?.fcmTokens?.map((entry) => entry.token).filter(Boolean) || [];
+
+          if (tokens.length) {
+            const baseCustomerName =
+              customer.name ||
+              [customer.firstName, customer.lastName].filter(Boolean).join(' ') ||
+              'Customer';
+            const customerDisplayName = customer.firmName
+              ? `${customer.firmName} (${baseCustomerName})`
+              : baseCustomerName;
+
+            const notificationTitle = 'Project Approved';
+            const notificationBody = `${customerDisplayName} • Status: Completed`;
+
+            await sendNotification({
+              tokens,
+              notification: {
+                title: notificationTitle,
+                body: notificationBody,
+              },
+              data: {
+                title: notificationTitle,
+                body: notificationBody,
+                customerName: baseCustomerName,
+                customerFirm: customer.firmName || '',
+                status: 'completed',
+                url: '/technician-dashboard?tab=completed',
+                icon: '/logo192.png',
+              },
+            });
+          }
+        } catch (notificationError) {
+          console.error('Failed to notify technician about approval:', notificationError);
+        }
+      }
      
       // Return the updated work order with populated fields
       const updatedCustomer = await Customer.findById(customerId)

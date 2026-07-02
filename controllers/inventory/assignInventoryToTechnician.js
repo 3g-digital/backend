@@ -75,9 +75,14 @@ const assignInventoryToTechnician = async (req, res) => {
         });
       }
       
-      // Check if this serial number is already assigned to any technician
+      // Check if this serial number is already actively assigned to any technician
       const alreadyAssigned = await TechnicianInventory.findOne({
-        'serializedItems.serialNumber': serialNumber
+        serializedItems: {
+          $elemMatch: {
+            serialNumber,
+            status: 'active'
+          }
+        }
       });
       
       if (alreadyAssigned) {
@@ -90,7 +95,12 @@ const assignInventoryToTechnician = async (req, res) => {
       // Remove from main inventory and add to technician inventory
       item.stock = item.stock.filter(s => !(s.serialNumber === serialNumber && s.branch.toString() === req.userBranch.toString()));
       await item.save();
-      
+
+      // Remove any stale returned entry for the same serial (if it exists)
+      techInventory.serializedItems = techInventory.serializedItems.filter(
+        serialEntry => !(serialEntry.serialNumber === serialNumber && serialEntry.status === 'returned')
+      );
+
       // Add to technician's serialized items
       techInventory.serializedItems.push({
         serialNumber,
@@ -143,11 +153,11 @@ const assignInventoryToTechnician = async (req, res) => {
       // Remove any empty stock entries
       item.stock = item.stock.filter(s => s.quantity > 0);
       await item.save();
-      
+
       // Update technician's generic quantity
       techInventory.genericQuantity += quantity;
     }
-    
+
     // Update last modified info
     techInventory.lastUpdated = new Date();
     techInventory.lastUpdatedBy = req.userId;

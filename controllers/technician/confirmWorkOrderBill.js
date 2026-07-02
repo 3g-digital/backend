@@ -12,7 +12,7 @@ const confirmWorkOrderBill = async (req, res) => {
       });
     }
 
-    const { billId, paymentMethod, transactionId = null, paidAmount = null } = req.body;
+    const { billId, paymentMethod, transactionId = null, paidAmount = null, receivedAmount = null, paymentDetails = {} } = req.body;
 
     // Find the bill
     const bill = await BillModel.findById(billId);
@@ -35,30 +35,82 @@ const confirmWorkOrderBill = async (req, res) => {
     // Update the bill with payment details
     bill.paymentMethod = paymentMethod;
 
-    // Handle partial payment logic
-    if (paymentMethod === 'cash' && paidAmount !== null) {
-      bill.amountPaid = paidAmount;
-      bill.amountDue = bill.totalAmount - paidAmount;
+    // Store payment details for different methods
+    if (Object.keys(paymentDetails).length > 0) {
+      bill.paymentDetails = paymentDetails;
+    }
 
-      if (paidAmount === 0) {
+    // Determine the actual paid amount
+    const actualPaidAmount = receivedAmount || paidAmount || 0;
+
+    // Handle payment for all methods
+    if (paymentMethod === 'cash') {
+      bill.amountPaid = actualPaidAmount;
+      bill.amountDue = bill.totalAmount - actualPaidAmount;
+
+      if (actualPaidAmount === 0) {
         bill.extendedPaymentStatus = 'unpaid';
-      } else if (paidAmount > 0 && paidAmount < bill.totalAmount) {
+      } else if (actualPaidAmount > 0 && actualPaidAmount < bill.totalAmount) {
         bill.extendedPaymentStatus = 'partial';
-      } else if (paidAmount === bill.totalAmount) {
+      } else if (actualPaidAmount >= bill.totalAmount) {
         bill.extendedPaymentStatus = 'paid';
       }
 
-      // Bill status remains pending until manager approval, but do not override if rejected
       if (bill.status !== 'rejected') {
         bill.status = 'pending';
       }
-    } else if (paymentMethod === 'online') {
-      bill.transactionId = transactionId;
+    } else if (paymentMethod === 'upi') {
+      // UPI is always full payment
+      bill.transactionId = transactionId || paymentDetails.upiTransactionId;
       bill.paidAt = new Date();
       bill.amountPaid = bill.totalAmount;
       bill.amountDue = 0;
       bill.extendedPaymentStatus = 'paid';
-      // Assuming manager approval needed for online as well, but do not override if rejected
+
+      if (bill.status !== 'rejected') {
+        bill.status = 'pending';
+      }
+    } else if (paymentMethod === 'bank_transfer') {
+      // Bank Transfer can be partial
+      bill.transactionId = transactionId || paymentDetails.utrNumber;
+      bill.paidAt = new Date();
+      bill.amountPaid = actualPaidAmount;
+      bill.amountDue = bill.totalAmount - actualPaidAmount;
+
+      if (actualPaidAmount === 0) {
+        bill.extendedPaymentStatus = 'unpaid';
+      } else if (actualPaidAmount > 0 && actualPaidAmount < bill.totalAmount) {
+        bill.extendedPaymentStatus = 'partial';
+      } else if (actualPaidAmount >= bill.totalAmount) {
+        bill.extendedPaymentStatus = 'paid';
+      }
+
+      if (bill.status !== 'rejected') {
+        bill.status = 'pending';
+      }
+    } else if (paymentMethod === 'cheque') {
+      // Cheque can be partial
+      bill.paidAt = new Date();
+      bill.amountPaid = actualPaidAmount;
+      bill.amountDue = bill.totalAmount - actualPaidAmount;
+
+      if (actualPaidAmount === 0) {
+        bill.extendedPaymentStatus = 'unpaid';
+      } else if (actualPaidAmount > 0 && actualPaidAmount < bill.totalAmount) {
+        bill.extendedPaymentStatus = 'partial';
+      } else if (actualPaidAmount >= bill.totalAmount) {
+        bill.extendedPaymentStatus = 'paid';
+      }
+
+      if (bill.status !== 'rejected') {
+        bill.status = 'pending';
+      }
+    } else if (paymentMethod === 'no_payment') {
+      // No payment - Bill created without collecting payment
+      bill.amountPaid = 0;
+      bill.amountDue = bill.totalAmount;
+      bill.extendedPaymentStatus = 'unpaid';
+
       if (bill.status !== 'rejected') {
         bill.status = 'pending';
       }
@@ -66,27 +118,25 @@ const confirmWorkOrderBill = async (req, res) => {
 
     await bill.save();
 
-    console.log('Bill amountPaid:', bill.amountPaid);
-    // Update inventory for generic items regardless of paidAmount
+    // Always update inventory when bill is confirmed, regardless of payment amount
+    // Items have been used/delivered even if payment is 0 (credit/later payment)
+    // If we have itemsToUpdate stored in the bill from createWorkOrderBill
     if (bill.itemsToUpdate && bill.itemsToUpdate.length > 0) {
       for (const updateItem of bill.itemsToUpdate) {
         const inventory = await TechnicianInventory.findById(updateItem.inventoryId);
 
         if (inventory) {
           if (updateItem.type === 'serialized') {
-            // Update serial item status to 'used' only if paidAmount > 0
-            if (bill.amountPaid > 0) {
-              const serialIndex = inventory.serializedItems.findIndex(
-                serial => serial.serialNumber === updateItem.serialNumber
-              );
+            // Update serial item status to 'used'
+            const serialIndex = inventory.serializedItems.findIndex(
+              serial => serial.serialNumber === updateItem.serialNumber
+            );
 
-              if (serialIndex >= 0) {
-                inventory.serializedItems[serialIndex].status = 'used';
-              }
+            if (serialIndex >= 0) {
+              inventory.serializedItems[serialIndex].status = 'used';
             }
           } else {
-            console.log(`Reducing generic inventory for inventoryId ${updateItem.inventoryId} by quantity ${updateItem.quantity}`);
-            // Reduce generic quantity by the specified amount regardless of paidAmount
+            // Reduce generic quantity by the specified amount
             inventory.genericQuantity -= updateItem.quantity;
             if (inventory.genericQuantity < 0) inventory.genericQuantity = 0;
           }
@@ -107,19 +157,16 @@ const confirmWorkOrderBill = async (req, res) => {
 
         if (inventory) {
           if (item.type === 'serialized-product' && item.serialNumber) {
-            // For serialized items, mark as used only if paidAmount > 0
-            if (bill.amountPaid > 0) {
-              const serialIndex = inventory.serializedItems.findIndex(
-                serial => serial.serialNumber === item.serialNumber
-              );
+            // For serialized items, mark as used
+            const serialIndex = inventory.serializedItems.findIndex(
+              serial => serial.serialNumber === item.serialNumber
+            );
 
-              if (serialIndex >= 0) {
-                inventory.serializedItems[serialIndex].status = 'used';
-              }
+            if (serialIndex >= 0) {
+              inventory.serializedItems[serialIndex].status = 'used';
             }
           } else if (item.type === 'generic-product') {
-            console.log(`Reducing generic inventory for itemId ${item.itemId} by quantity ${item.quantity}`);
-            // For generic items, reduce quantity by the amount in the bill regardless of paidAmount
+            // For generic items, reduce quantity by the amount in the bill
             inventory.genericQuantity -= item.quantity;
             if (inventory.genericQuantity < 0) inventory.genericQuantity = 0;
           }
@@ -158,9 +205,17 @@ const confirmWorkOrderBill = async (req, res) => {
           workOrder.statusHistory = [];
         }
 
+        // Create appropriate remark based on payment method
+        let paymentRemark;
+        if (paymentMethod === 'no_payment') {
+          paymentRemark = `Bill created without payment - Full amount of ₹${bill.totalAmount.toFixed(2)} marked as due`;
+        } else {
+          paymentRemark = `Payment of ₹${bill.totalAmount.toFixed(2)} received via ${paymentMethod}`;
+        }
+
         workOrder.statusHistory.push({
           status: 'payment',
-          remark: `Payment of ₹${bill.totalAmount.toFixed(2)} received via ${paymentMethod}`,
+          remark: paymentRemark,
           updatedAt: new Date(),
           updatedBy: req.user._id
         });

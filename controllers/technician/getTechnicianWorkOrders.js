@@ -75,6 +75,7 @@ const getTechnicianWorkOrders = async (req, res) => {
           customerWhatsapp: customer.whatsappNumber,
           customerEmail: customer.email,
           customerAddress: customer.address,
+          customerFirmName: customer.firmName,
           branchName: customer.branch ? customer.branch.name : null,
           projectCategory: category, // Using our determined category here
           projectCreatedAt: project ? project.createdAt : null,

@@ -14,9 +14,12 @@ const managerAddTechnicianController = async (req, res) => {
     
     const { firstName, lastName, username, email, password, phone, branch } = req.body;
 
+    // Trim username to remove leading/trailing spaces
+    const trimmedUsername = username.trim();
+
     // Validate username for allowed characters (letters, numbers, _, ., -)
     const usernameRegex = /^[a-zA-Z0-9_.-@#]+$/;
-    if (!usernameRegex.test(username)) {
+    if (!usernameRegex.test(trimmedUsername)) {
       return res.status(400).json({
         message: 'Username can only contain letters, numbers, and symbols (_ . -). Spaces are not allowed.',
         error: true,
@@ -26,7 +29,7 @@ const managerAddTechnicianController = async (req, res) => {
     
     // Check if username or email already exists
     const existingUser = await User.findOne({
-      $or: [{ username }, { email }]
+      $or: [{ username: trimmedUsername }]
     });
     
     if (existingUser) {
@@ -48,8 +51,8 @@ const managerAddTechnicianController = async (req, res) => {
     const newTechnician = new User({
       firstName,
       lastName,
-      username,
-      email,
+      username: trimmedUsername,
+      email: email || undefined,
       password,
       phone,
       role: 'technician',

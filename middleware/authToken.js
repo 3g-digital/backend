@@ -17,11 +17,20 @@ const authMiddleware = async (req, res, next) => {
       });
     }
    
-    // Verify token
-    const decoded = jwt.verify(token, process.env.TOKEN_SECRET_KEY);
+    // Check if secret key exists
+    if (!process.env.TOKEN_SECRET_KEY) {
+      console.error('TOKEN_SECRET_KEY not found in environment variables');
+      return res.status(500).json({
+        message: 'Server configuration error',
+        error: true,
+        success: false
+      });
+    }
 
     console.log('Secret key exists:', !!process.env.TOKEN_SECRET_KEY);
-// Don't log the actual secret in production, just check if it exists
+
+    // Verify token
+    const decoded = jwt.verify(token, process.env.TOKEN_SECRET_KEY);
    
     // Find user
     const user = await User.findById(decoded.userId);
@@ -57,6 +66,18 @@ const authMiddleware = async (req, res, next) => {
     next();
   } catch (err) {
     console.error('Auth middleware error:', err);
+
+    // Check if it's a JWT error specifically
+    if (err.name === 'JsonWebTokenError') {
+      console.log('JWT Error - Token invalid or expired. User needs to re-login.');
+      return res.status(401).json({
+        message: 'Session expired. Please login again.',
+        error: true,
+        success: false,
+        needsRelogin: true
+      });
+    }
+
     return res.status(401).json({
       message: 'Authentication failed',
       error: true,

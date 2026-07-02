@@ -1,8 +1,12 @@
 const logoutController = async (req, res) => {
     try {
-      // Clear the cookie
-      res.clearCookie('token');
-      
+      // Clear the cookie with same options as set during login
+      res.clearCookie('token', {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'None'
+      });
+
       res.status(200).json({
         message: 'Logout successful',
         error: false,

@@ -4,8 +4,7 @@ const mongoose = require('mongoose');
 const workOrderSchema = new mongoose.Schema({
   orderId: {
     type: String,
-    required: true,
-    unique: true
+    required: true
   },
   projectId: {
     type: String,
@@ -23,16 +22,28 @@ const workOrderSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'assigned', 'in-progress', 'paused', 'pending-approval', 'completed', 'transferring', 'transferred', 'rejected'],
+    enum: ['pending', 'assigned', 'in-progress', 'paused', 'pending-approval', 'completed', 'transferring', 'transferred', 'rejected', 'job-closed', 'cancelled'],
     default: 'pending'
   },
   initialRemark: {  // Add this field
     type: String
   },
+  // Track who created this work order (manager or admin)
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  createdByRole: {
+    type: String,
+    enum: ['admin', 'manager']
+  },
+  createdByName: {
+    type: String
+  },
   statusHistory: [{
     status: {
       type: String,
-      enum: ['assigned', 'in-progress', 'paused', 'pending-approval', 'completed', 'payment', 'approval', 'remark', 'communication', 'transferring', 'transferred', 'pending', 'rejected'],
+      enum: ['assigned', 'in-progress', 'paused', 'pending-approval', 'completed', 'payment', 'approval', 'remark', 'communication', 'transferring', 'transferred', 'pending', 'rejected', 'job-closed', 'cancelled', 'instruction'],
       required: true
     },
     remark: {
@@ -91,6 +102,13 @@ const workOrderSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
+  assignedByRole: {
+    type: String,
+    enum: ['admin', 'manager']
+  },
+  assignedByName: {
+    type: String
+  },
   assignedAt: {
     type: Date
   },
@@ -114,20 +132,34 @@ const customerSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  email: {
-    type: String,
-    match: /^\S+@\S+\.\S+$/,
-    sparse: true
+    firmName:{
+     type: String,
   },
+  // email: {
+  //   type: String,
+  //   match: /^\S+@\S+\.\S+$/,
+  //   sparse: true
+  // },
   whatsappNumber: {
     type: String
   },
   address: {
     type: String
   },
-  age: {
-    type: Number
+  // Contact Person Details
+  contactPersonName: {
+    type: String
   },
+  contactPersonPhone: {
+    type: String
+  },
+  showOwnerDetailsToTechnician: {
+    type: Boolean,
+    default: false
+  },
+  // age: {
+  //   type: Number
+  // },
   projects: [{
     projectId: {
       type: String,
@@ -139,6 +171,7 @@ const customerSchema = new mongoose.Schema({
         'CCTV Camera',
         'Attendance System',
         'Safe and Locks',
+        'Lift & Elevator Solutions',
         'Home/Office Automation',
         'IT & Networking Services',
         'Software & Website Development',
@@ -152,6 +185,36 @@ const customerSchema = new mongoose.Schema({
     },
     initialRemark: {
       type: String
+    },
+    installedBy: {
+      type: String,
+      enum: ['Our Company', 'Others']
+    },
+    installedByEngineer: {
+      type: String
+    },
+    engineerMobileNo: {
+      type: String
+    },
+    completionDate: {
+      type: Date
+    },
+    // Track who created this project (manager or admin)
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    createdByRole: {
+      type: String,
+      enum: ['admin', 'manager']
+    },
+    createdByName: {
+      type: String
+    },
+    status: {
+      type: String,
+      enum: ['pending', 'in-progress', 'completed'],
+      default: 'pending'
     },
     completedBy: {
       type: mongoose.Schema.Types.ObjectId,
@@ -175,6 +238,11 @@ const customerSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Lead'
   },
+  customerStatus: {
+    type: String,
+    enum: ['New', 'Existing', 'Billing'],
+    default: 'New'
+  },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -196,6 +264,24 @@ const customerSchema = new mongoose.Schema({
 
 // Create index for search optimization
 customerSchema.index({ name: 'text', phoneNumber: 'text', email: 'text' });
+
+// Create unique index for workOrders.orderId with partial filter
+// Only creates index for documents that have workOrders with orderId that is a string
+customerSchema.index(
+  { 'workOrders.orderId': 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      'workOrders.orderId': { $type: 'string' }
+    }
+  }
+);
+
+// Performance optimization indexes
+customerSchema.index({ branch: 1, createdAt: -1 }); // For filtering by branch and sorting
+customerSchema.index({ createdBy: 1 }); // For populate optimization
+customerSchema.index({ 'workOrders.technician': 1 }); // For technician work orders query
+customerSchema.index({ 'workOrders.status': 1 }); // For status filtering
 
 const customerModel = mongoose.model('Customer', customerSchema);
 

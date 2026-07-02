@@ -48,6 +48,16 @@ const returnedInventorySchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
+  rejectedAt: {
+    type: Date
+  },
+  rejectedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  rejectionReason: {
+    type: String
+  },
   notes: {
     type: String
   }

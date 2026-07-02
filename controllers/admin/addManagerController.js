@@ -14,9 +14,12 @@ const addManagerController = async (req, res) => {
    
     const { firstName, lastName, username, email, password, phone, branch, status } = req.body;
 
+    // Trim username to remove leading/trailing spaces
+    const trimmedUsername = username.trim();
+
     // Validate username for allowed characters (letters, numbers, _, ., -)
     const usernameRegex = /^[a-zA-Z0-9_.-@#]+$/;
-    if (!usernameRegex.test(username)) {
+    if (!usernameRegex.test(trimmedUsername)) {
       return res.status(400).json({
         message: 'Username can only contain letters, numbers, and symbols (_ . -). Spaces are not allowed.',
         error: true,
@@ -26,7 +29,7 @@ const addManagerController = async (req, res) => {
    
     // Check if username or email already exists
     const existingUser = await User.findOne({
-      $or: [{ username }, { email }]
+      $or: [{ username: trimmedUsername }, { email }]
     });
    
     if (existingUser) {
@@ -68,7 +71,7 @@ const addManagerController = async (req, res) => {
     const newManager = new User({
       firstName,
       lastName,
-      username,
+      username: trimmedUsername,
       email,
       password,
       phone,

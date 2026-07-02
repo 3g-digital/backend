@@ -66,5 +66,10 @@ const warrantyReplacementSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
+// Performance optimization indexes
+warrantyReplacementSchema.index({ serialNumber: 1 }); // For serial number lookup
+warrantyReplacementSchema.index({ customerId: 1, status: 1 }); // For customer warranty queries
+warrantyReplacementSchema.index({ status: 1, registeredAt: -1 }); // For filtering by status and sorting
+
 const WarrantyReplacement = mongoose.model('WarrantyReplacement', warrantyReplacementSchema);
 module.exports = WarrantyReplacement;

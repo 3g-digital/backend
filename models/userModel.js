@@ -14,7 +14,6 @@ const UserSchema = new mongoose.Schema({
   },
   email: {
     type: String,
-    unique: true
   },
   password: {
     type: String,
@@ -43,11 +42,40 @@ const UserSchema = new mongoose.Schema({
       return this.role === 'manager' ? 'active' : undefined;
     }
   },
+  profileImage: {
+    type: String,
+    default: null
+  },
+  profileImagePublicId: {
+    type: String,
+    default: null
+  },
+  fcmTokens: [
+    {
+      token: String,
+      deviceType: String,
+      platform: String,
+      createdAt: {
+        type: Date,
+        default: Date.now
+      },
+      lastUsedAt: {
+        type: Date,
+        default: Date.now
+      }
+    }
+  ],
   createdAt: {
     type: Date,
     default: Date.now
   },
 });
+
+// Performance optimization indexes
+UserSchema.index({ role: 1, branch: 1 }); // For filtering users by role and branch
+UserSchema.index({ role: 1, status: 1 }); // For filtering by role and status
+UserSchema.index({ branch: 1 }); // For branch-based queries
+
 // Hash password before saving
 UserSchema.pre('save', async function(next) {
   if (!this.isModified('password')) {

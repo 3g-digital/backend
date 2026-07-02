@@ -4,9 +4,12 @@ const User = require('../../models/userModel');
 const loginController = async (req, res) => {
   try {
     const { username, password } = req.body;
-   
-    // Check for user
-    const user = await User.findOne({ username: new RegExp(`^${username}$`, 'i') });
+
+    // Trim username to remove leading/trailing spaces
+    const trimmedUsername = username.trim();
+
+    // Check for user and populate branch data
+    const user = await User.findOne({ username: new RegExp(`^${trimmedUsername}$`, 'i') }).populate('branch');
     if (!user) {
       return res.status(401).json({
         message: 'Invalid credentials',

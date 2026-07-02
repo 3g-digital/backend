@@ -2,6 +2,8 @@ const Customer = require('../../models/customerModel');
 const BillModel = require('../../models/billModel');
 const TechnicianInventory = require('../../models/technicianInventoryModel');
 const { generateResponse } = require('../../helpers/responseGenerator');
+const User = require('../../models/userModel');
+const sendNotification = require('../../helpers/push/sendNotification');
 
 const rejectBill = async (req, res) => {
   try {
@@ -118,6 +120,45 @@ const rejectBill = async (req, res) => {
     }
 
     await customer.save();
+
+    if (technicianId) {
+      try {
+        const technician = await User.findById(technicianId).select('fcmTokens');
+        const tokens = technician?.fcmTokens?.map((entry) => entry.token).filter(Boolean) || [];
+
+        if (tokens.length) {
+          const baseCustomerName = customer.name || 'Customer';
+          const customerDisplayName = customer.firmName
+            ? `${customer.firmName} (${baseCustomerName})`
+            : baseCustomerName;
+          const reasonLine = rejectionReason.replace(/\s+/g, ' ').trim();
+          const truncatedReason = reasonLine.length > 120 ? `${reasonLine.slice(0, 117)}...` : reasonLine;
+
+          const notificationTitle = 'Bill Rejected';
+          const notificationBody = `${customerDisplayName} • Status: Rejected • Reason: ${truncatedReason}`;
+
+          await sendNotification({
+            tokens,
+            notification: {
+              title: notificationTitle,
+              body: notificationBody,
+            },
+            data: {
+              title: notificationTitle,
+              body: notificationBody,
+              customerName: baseCustomerName,
+              customerFirm: customer.firmName || '',
+              status: 'rejected',
+              reason: truncatedReason,
+              url: '/technician-dashboard',
+              icon: '/logo192.png',
+            },
+          });
+        }
+      } catch (notificationError) {
+        console.error('Failed to notify technician about bill rejection:', notificationError);
+      }
+    }
 
     const updatedCustomer = await Customer.findById(customer._id)
       .populate({

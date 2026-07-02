@@ -30,19 +30,35 @@ const leadSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  email: {
-    type: String,
-    match: /^\S+@\S+\.\S+$/,
-    sparse: true
+  firmName:{
+     type: String,
   },
+  // email: {
+  //   type: String,
+  //   match: /^\S+@\S+\.\S+$/,
+  //   sparse: true
+  // },
   whatsappNumber: {
     type: String
   },
   address: {
     type: String
   },
-  age: {
-    type: Number
+  // age: {
+  //   type: Number
+  // },
+  projectType: {
+    type: String,
+    enum: [
+      'CCTV Camera',
+      'Attendance System',
+      'Safe and Locks',
+      'Lift & Elevator Solutions',
+      'Home/Office Automation',
+      'IT & Networking Services',
+      'Software & Website Development',
+      'Custom'
+    ]
   },
   remarks: [remarkSchema],
   status: {
@@ -71,6 +87,18 @@ const leadSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Customer'
   },
+  convertedToDealer: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Dealer'
+  },
+  convertedToDistributor: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Distributor'
+  },
+  convertedType: {
+    type: String,
+    enum: ['customer', 'dealer', 'distributor']
+  },
   convertedAt: {
     type: Date
   },
@@ -86,6 +114,10 @@ const leadSchema = new mongoose.Schema({
 
 // Create index for search optimization
 leadSchema.index({ name: 'text', phoneNumber: 'text', email: 'text' });
+
+// Performance optimization indexes
+leadSchema.index({ branch: 1, isConverted: 1, createdAt: -1 }); // For filtering leads by branch and conversion status
+leadSchema.index({ createdBy: 1 }); // For populate optimization
 
 const leadModel = mongoose.model('Lead', leadSchema);
 

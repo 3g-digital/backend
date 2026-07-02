@@ -47,6 +47,7 @@ const getWorkOrderDetails = async (req, res) => {
       customerPhone: customer.phoneNumber,
       customerEmail: customer.email,
       customerAddress: customer.address,
+      customerFirmName: customer.firmName,
       branchName: customer.branch ? customer.branch.name : null
     };
    

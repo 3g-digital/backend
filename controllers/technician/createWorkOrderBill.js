@@ -53,7 +53,10 @@ const createWorkOrderBill = async (req, res) => {
     const technicianInventory = await TechnicianInventory.find({
       technician: req.user._id
     }).populate('item');
-    
+
+    // Filter out items where populate failed (deleted items)
+    const validInventory = technicianInventory.filter(inv => inv.item !== null);
+
     // Check if all items are in technician's inventory
     const itemsToUpdate = [];
     const billItems = [];
@@ -84,7 +87,10 @@ const createWorkOrderBill = async (req, res) => {
       }
     
       // For non-service items, check inventory
-      const inventoryItem = technicianInventory.find(inv => {
+      const inventoryItem = validInventory.find(inv => {
+        // Safety check - skip if item is null
+        if (!inv.item) return false;
+
         // Check by ID if possible
         if (inv.item._id) {
           const matchesWithItemId = inv.item._id.toString() === billItem.itemId;
@@ -94,24 +100,24 @@ const createWorkOrderBill = async (req, res) => {
           const matchesWithId = inv.item.id.toString() === billItem.itemId;
           if (matchesWithId) return true;
         }
-        
+
         // If ID doesn't match, try matching by name
         if (inv.item.name && billItem.name) {
           return inv.item.name.toLowerCase() === billItem.name.toLowerCase();
         } else if (inv.item.itemName && billItem.name) {
           return inv.item.itemName.toLowerCase() === billItem.name.toLowerCase();
         }
-        
+
         return false;
       });
-      
+
       if (!inventoryItem) {
-        console.log("All available inventory items:", technicianInventory.map(inv => ({
-          id: inv.item._id || inv.item.id,
-          name: inv.item.name || inv.item.itemName,
-          itemId: inv.item.itemId
+        console.log("All available inventory items:", validInventory.map(inv => ({
+          id: inv.item?._id || inv.item?.id,
+          name: inv.item?.name || inv.item?.itemName,
+          itemId: inv.item?.itemId
         })));
-        
+
         return res.status(400).json({
           success: false,
           message: `Item ${billItem.itemId} not found in your inventory`
@@ -153,11 +159,11 @@ const createWorkOrderBill = async (req, res) => {
           type: 'serialized-product',
           serialNumber: billItem.serialNumber,
           quantity: 1,
-          price: inventoryItem.item.salePrice || 0,
-          amount: inventoryItem.item.salePrice || 0
+          price: inventoryItem.item.pricing?.customerPrice || inventoryItem.item.salePrice || 0,
+          amount: inventoryItem.item.pricing?.customerPrice || inventoryItem.item.salePrice || 0
         });
         
-        totalAmount += inventoryItem.item.salePrice || 0;
+        totalAmount += inventoryItem.item.pricing?.customerPrice || inventoryItem.item.salePrice || 0;
       }  else {
         // For generic items, check if quantity is available
         if (inventoryItem.genericQuantity < billItem.quantity) {
@@ -180,11 +186,11 @@ const createWorkOrderBill = async (req, res) => {
           name: inventoryItem.item.name,
           type: 'generic-product',
           quantity: billItem.quantity,
-          price: inventoryItem.item.salePrice || 0,
-          amount: (inventoryItem.item.salePrice || 0) * billItem.quantity
+          price: inventoryItem.item.pricing?.customerPrice || inventoryItem.item.salePrice || 0,
+          amount: (inventoryItem.item.pricing?.customerPrice || inventoryItem.item.salePrice || 0) * billItem.quantity
         });
         
-        totalAmount += (inventoryItem.item.salePrice || 0) * billItem.quantity;
+        totalAmount += (inventoryItem.item.pricing?.customerPrice || inventoryItem.item.salePrice || 0) * billItem.quantity;
       }
     }
     

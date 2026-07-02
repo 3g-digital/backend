@@ -1,5 +1,6 @@
 const Lead = require('../../models/leadModel');
 const Customer = require('../../models/customerModel');
+const generateOrderId = require('../../helpers/generateOrderId');
 
 const convertToCustomer = async (req, res) => {
   try {
@@ -38,20 +39,38 @@ const convertToCustomer = async (req, res) => {
       });
     }
     
+    // Generate project ID and order ID
+    const projectId = `PRJ-${Date.now().toString().slice(-6)}`;
+    const orderId = await generateOrderId();
+    
     // Create new customer from lead data
     const customer = await Customer.create({
       name: lead.name,
       phoneNumber: lead.phoneNumber,
       email: lead.email,
+      firmName: lead.firmName,
       whatsappNumber: lead.whatsappNumber,
       address: lead.address,
       age: lead.age,
       branch: lead.branch,
       convertedFromLead: true,
       leadId: lead._id,
-      // Include project information
-      projectType,
-      initialRemark,
+      projects: [{
+        projectId,
+        projectType,
+        projectCategory: 'New Installation',
+        initialRemark,
+        createdAt: new Date()
+      }],
+      workOrders: [{
+        orderId,
+        projectId,
+        projectType,
+        projectCategory: 'New Installation',
+        status: 'pending',
+        initialRemark,
+        createdAt: new Date()
+      }],
       createdBy: req.user.id,
       updatedBy: req.user.id
     });
@@ -60,6 +79,7 @@ const convertToCustomer = async (req, res) => {
     await Lead.findByIdAndUpdate(req.params.id, {
       isConverted: true,
       convertedToCustomer: customer._id,
+      convertedType: 'customer',
       convertedAt: Date.now(),
       updatedBy: req.user.id,
       updatedAt: Date.now()

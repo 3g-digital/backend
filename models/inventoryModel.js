@@ -72,9 +72,27 @@ const itemSchema = new mongoose.Schema({
       return this.type === 'serialized-product' || this.type === 'generic-product';
     }
   },
+  pricing: {
+    customerPrice: {
+      type: Number,
+      required: true
+    },
+    dealerPrice: {
+      type: Number,
+      required: true
+    },
+    distributorPrice: {
+      type: Number,
+      required: true
+    }
+  },
+  // Keep old salePrice for backward compatibility
   salePrice: {
     type: Number,
-    required: true
+    required: function() {
+      // Only required if pricing object is not provided
+      return !this.pricing || (!this.pricing.customerPrice && !this.pricing.dealerPrice && !this.pricing.distributorPrice);
+    }
   },
   stock: [stockSchema],
   createdAt: {
